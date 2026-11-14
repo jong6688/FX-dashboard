@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b7a6b">
+<title>환율 대시보드</title>
+<style>
+  :root {
+    --bg: #f3f5f7; --card: #fff; --text: #1a1f24; --sub: #6b7480; --line: #e6e9ed;
+    --accent: #0b7a6b; --accent-soft: #e5f3f1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111417; --card: #1b1f24; --text: #eef1f4; --sub: #98a2ad; --line: #2a3038;
+            --accent: #3cc2ad; --accent-soft: #19302d; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  main { max-width: 520px; margin: 0 auto; padding: 20px 16px 32px; }
+  header h1 { font-size: 22px; margin: 4px 0 4px; letter-spacing: -0.3px; }
+  header p { margin: 0; color: var(--sub); font-size: 13px; line-height: 1.5; }
+  .updated { display: inline-block; margin-top: 10px; padding: 5px 10px; border-radius: 999px;
+             background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+  .cards { display: grid; gap: 12px; margin-top: 18px; }
+  .card { background: var(--card); border-radius: 16px; padding: 16px 18px;
+          box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 14px rgba(0,0,0,.04); }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .flag { font-size: 26px; line-height: 1; }
+  .code { font-weight: 700; font-size: 17px; }
+  .name { color: var(--sub); font-size: 13px; }
+  .latest { margin-top: 12px; }
+  .label { color: var(--sub); font-size: 12px; }
+  .big { font-size: 30px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+  .big small { font-size: 15px; font-weight: 500; color: var(--sub); margin-left: 3px; }
+  .avgs { display: grid; grid-template-columns: 1fr 1fr; margin-top: 14px; border-top: 1px solid var(--line); }
+  .avg { padding-top: 12px; }
+  .avg + .avg { border-left: 1px solid var(--line); padding-left: 14px; }
+  .avg .v { font-size: 18px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .avg .p { color: var(--sub); font-size: 11px; margin-top: 2px; }
+  .msg { margin-top: 24px; padding: 18px; border-radius: 14px; background: var(--card); color: var(--sub);
+         font-size: 14px; text-align: center; }
+  footer { margin-top: 20px; color: var(--sub); font-size: 11px; line-height: 1.6; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>환율 대시보드</h1>
+    <p>하나은행 매매기준율 · 최초 고시 기준 · 1단위당 원</p>
+    <span class="updated" id="updated">불러오는 중…</span>
+  </header>
+  <section class="cards" id="cards"></section>
+  <footer>평균은 하나은행 평균환율(영업일 기준) 값입니다.<br>평일 09:30 자동 업데이트</footer>
+</main>
+<script>
+const META = {
+  USD: { flag: "🇺🇸", name: "미국 달러" },
+  EUR: { flag: "🇪🇺", name: "유로" },
+  GBP: { flag: "🇬🇧", name: "영국 파운드" },
+  CNY: { flag: "🇨🇳", name: "중국 위안" },
+};
+const fmt = n => n.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const md = s => { const [, m, d] = s.split("-"); return `${+m}/${+d}`; };
+
+function render(data) {
+  const u = new Date(data.updated_at);
+  document.getElementById("updated").textContent = "마지막 업데이트 " + u.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  document.getElementById("cards").innerHTML = Object.keys(META).map(code => {
+    const c = data.currencies[code];
+    if (!c) return "";
+    const m = META[code];
+    const avg = (label, a) => `
+      <div class="avg">
+        <div class="label">${label}</div>
+        <div class="v">${fmt(a.rate)}</div>
+        <div class="p">${md(a.from)}~${md(a.to)} · ${a.days}영업일</div>
+      </div>`;
+    return `
+      <article class="card">
+        <div class="head"><span class="flag">${m.flag}</span>
+          <div><div class="code">${code}</div><div class="name">${m.name}</div></div></div>
+        <div class="latest">
+          <div class="label">최신 고시 (${c.latest.date})</div>
+          <div class="big">${fmt(c.latest.rate)}<small>원</small></div>
+        </div>
+        <div class="avgs">${avg("당월 평균", c.month_avg)}${avg("연간 평균", c.year_avg)}</div>
+      </article>`;
+  }).join("");
+}
+
+fetch("data/rates.json", { cache: "no-store" })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(render)
+  .catch(() => {
+    document.getElementById("updated").textContent = "데이터 없음";
+    document.getElementById("cards").innerHTML =
+      '<div class="msg">아직 수집된 데이터가 없습니다.<br>GitHub Actions의 첫 실행 후 표시됩니다.</div>';
+  });
+</script>
+</body>
+</html>
