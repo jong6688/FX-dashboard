@@ -156,19 +156,36 @@ def fetch_daily(d: date) -> dict[str, float]:
     return extract_rates(html)
 
 
-def fetch_avg(start: date, end: date) -> dict[str, float]:
+def fetch_month_avg(base: date) -> dict[str, float]:
+    """하나은행 월평균 환율 조회 (당월 첫 영업일 ~ base, 최초 고시 기준)."""
     data = {
         "ajax": "true",
-        "inqDvCd": "4",  # 기간평균
-        "inqStrDt": start.strftime("%Y%m%d"),
-        "inqEndDt": end.strftime("%Y%m%d"),
-        "pbldDvCd": "1",  # 최초
-        "tmpInqStrDt_p": start.strftime("%Y-%m-%d"),
-        "tmpInqEndDt_p": end.strftime("%Y-%m-%d"),
-        "tmpPbldDvCd": "1",
+        "inqDvCd": "2",  # 월평균
+        "tmpInqStrDtY_m": str(base.year),
+        "tmpInqStrDtM_m": f"{base.month:02d}",
+        "tmpPbldDvCd": "1",  # 최초
+        "inqStrDt": base.strftime("%Y%m01"),
+        "inqEndDt": base.strftime("%Y%m%d"),
+        "pbldDvCd": "1",
     }
     html = post(AVG_API, data, AVG_REFERER)
-    dump(f"avg_{start:%Y%m%d}_{end:%Y%m%d}.html", html)
+    dump(f"avg_month_{base:%Y%m}.html", html)
+    return extract_rates(html)
+
+
+def fetch_year_avg(base: date) -> dict[str, float]:
+    """하나은행 연평균 환율 조회 (해당 연도 첫 영업일 ~ base, 최초 고시 기준)."""
+    data = {
+        "ajax": "true",
+        "inqDvCd": "3",  # 연평균
+        "tmpInqStrDtY_y": str(base.year),
+        "tmpPbldDvCd": "1",  # 최초
+        "inqStrDt": base.strftime("%Y0101"),
+        "inqEndDt": base.strftime("%Y%m%d"),
+        "pbldDvCd": "1",
+    }
+    html = post(AVG_API, data, AVG_REFERER)
+    dump(f"avg_year_{base:%Y}.html", html)
     return extract_rates(html)
 
 
@@ -208,8 +225,8 @@ def main():
     # 2) 하나은행 평균환율 (최초 고시 기준)
     m_start = base.replace(day=1)
     y_start = date(base.year, 1, 1)
-    month_avg = fetch_avg(m_start, base)
-    year_avg = fetch_avg(y_start, base)
+    month_avg = fetch_month_avg(base)
+    year_avg = fetch_year_avg(base)
     log(f"당월 평균({m_start}~{base}): {month_avg}")
     log(f"연간 평균({y_start}~{base}): {year_avg}")
     if len(month_avg) != len(CURRENCIES) or len(year_avg) != len(CURRENCIES):
